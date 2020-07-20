@@ -136,6 +136,7 @@ def main():
     libvirt_template = template.render(**params)
     conn = libvirt.open("qemu:///system")
 
+    print(libvirt_template)
     a = conn.defineXML(libvirt_template)
     print("Created machine %s with UUID %s" % (args.name, a.UUIDString()))
 

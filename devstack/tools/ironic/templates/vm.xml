@@ -3,7 +3,11 @@
   <memory unit='KiB'>{{ memory }}</memory>
   <vcpu>{{ cpus }}</vcpu>
   <os>
+	{% if arch == 'aarch64' %}
+	<type arch='{{ arch }}' machine='virt'>hvm</type>
+	{% else %}
     <type arch='{{ arch }}' machine='pc'>hvm</type>
+    {% endif %}
     {% if bootdev == 'network' and not uefi_loader %}
     <boot dev='{{ bootdev }}'/>
     {% endif %}
@@ -14,7 +18,9 @@
         {% endif %}
     {% endif %}
     <bootmenu enable='no'/>
-    <bios useserial='yes'/>
+    {% if arch != 'aarch64' %}
+	<bios useserial='yes'/>
+	{% endif %}
   </os>
   {% if engine == 'kvm' %}
     <cpu mode='host-passthrough'/>
@@ -34,13 +40,29 @@
     <disk type='file' device='disk'>
       <driver name='qemu' type='{{ disk_format }}' cache='unsafe'/>
       <source file='{{ imagefile }}'/>
-          <target dev='vd{{ letter }}' bus='virtio'/>
-          <address type='pci' domain='0x0000' bus='0x00' slot='0x0{{ letter }}' function='0x0'/>
+	  <target dev='vd{{ letter }}' bus='virtio'/>
+	  {% if arch == 'aarch64' %}
+	  <address type='pci' domain='0x0000' bus='0x0{{letter}}' slot='0x00' function='0x0'/>
+      {% else %}
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x0{{ letter }}' function='0x0'/>
+	  {% endif %}
     </disk>
     {% endfor %}
+    {% if arch == 'aarch64' %}
+    <controller type='pci' index='0' model='pcie-root'>
+      <alias name='pcie.0'/>
+    </controller>
+    <controller type='pci' index='1' model='pcie-root-port'>
+      <model name='pcie-root-port'/>
+      <target chassis='1' port='0x8'/>
+      <alias name='pci.1'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0' multifunction='on'/>
+    </controller>
+    {% else %}
     <controller type='ide' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
     </controller>
+    {% endif %}
     {% for n in range(1, interface_count+1) %}
     <interface type='direct'>
       {% if n == 1 and mac %}
@@ -48,13 +70,15 @@
       {% endif %}
       <source dev='{{ "tap-" + name + "i" + n|string }}'/>
       <model type='{{ nicdriver }}'/>
-      <address type='pci' domain='0x0000' bus='0x01' slot='{{ "0x0" + n|string }}' function='0x0'/>
+      <address type='pci' domain='0x0000' bus='{{ "0x0" + n|string }}' slot='0x00' function='0x0'/>
       {% if uefi_loader and bootdev == 'network' %}
       <boot order='{{ n|string }}'/>
       {% endif %}
     </interface>
-    {% endfor %}
-    <input type='mouse' bus='ps2'/>
+		{% endfor %}
+    {% if arch != 'aarch64' %}
+	<input type='mouse' bus='ps2'/>
+    {% endif %}
     {{ console }}
     <memballoon model='virtio'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>

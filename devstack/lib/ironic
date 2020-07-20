@@ -57,6 +57,7 @@ GITREPO["sushy-tools"]=${SUSHY_TOOLS_REPO:-${GIT_BASE}/openstack/sushy-tools.git
 GITBRANCH["sushy-tools"]=${SUSHY_TOOLS_BRANCH:-master}
 GITDIR["sushy-tools"]=$DEST/sushy-tools
 
+IRONIC_ARCH=${IRONIC_ARCH:-$(uname -m)}
 IRONIC_DIR=$DEST/ironic
 IRONIC_DEVSTACK_DIR=$IRONIC_DIR/devstack
 IRONIC_DEVSTACK_FILES_DIR=$IRONIC_DEVSTACK_DIR/files
@@ -68,7 +69,7 @@ IRONIC_PYTHON_AGENT_DIR=$DEST/ironic-python-agent
 IRONIC_PYTHON_AGENT_BUILDER_REPO=${IRONIC_PYTHON_AGENT_BUILDER_REPO:-${GIT_BASE}/openstack/ironic-python-agent-builder.git}
 IRONIC_PYTHON_AGENT_BUILDER_BRANCH=${IRONIC_PYTHON_AGENT_BUILDER_BRANCH:-$BRANCHLESS_TARGET_BRANCH}
 IRONIC_PYTHON_AGENT_BUILDER_DIR=$DEST/ironic-python-agent-builder
-IRONIC_DIB_BINDEP_FILE=https://opendev.org/openstack/diskimage-builder/raw/branch/master/bindep.txt
+IRONIC_DIB_BINDEP_FILE=https://github.com/xin3liang/diskimage-builder/raw/fix-bindep-focal/bindep.txt
 IRONIC_DATA_DIR=$DATA_DIR/ironic
 IRONIC_STATE_PATH=/var/lib/ironic
 IRONIC_AUTH_CACHE_DIR=${IRONIC_AUTH_CACHE_DIR:-/var/cache/ironic}
@@ -110,7 +111,7 @@ IRONIC_HW_NODE_CPU=${IRONIC_HW_NODE_CPU:-1}
 IRONIC_HW_NODE_RAM=${IRONIC_HW_NODE_RAM:-512}
 IRONIC_HW_NODE_DISK=${IRONIC_HW_NODE_DISK:-10}
 IRONIC_HW_EPHEMERAL_DISK=${IRONIC_HW_EPHEMERAL_DISK:-0}
-IRONIC_HW_ARCH=${IRONIC_HW_ARCH:-x86_64}
+IRONIC_HW_ARCH=${IRONIC_HW_ARCH:-${IRONIC_ARCH}}
 
 # The file is composed of multiple lines, each line includes fields
 # separated by white space, in the format:
@@ -144,11 +145,11 @@ IRONIC_TFTP_BLOCKSIZE=${IRONIC_TFTP_BLOCKSIZE:-$((PUBLIC_BRIDGE_MTU-50))}
 IRONIC_VM_COUNT=${IRONIC_VM_COUNT:-1}
 IRONIC_VM_SPECS_CPU=${IRONIC_VM_SPECS_CPU:-1}
 IRONIC_VM_SPECS_RAM=${IRONIC_VM_SPECS_RAM:-3072}
-IRONIC_VM_SPECS_CPU_ARCH=${IRONIC_VM_SPECS_CPU_ARCH:-'x86_64'}
+IRONIC_VM_SPECS_CPU_ARCH=${IRONIC_VM_SPECS_CPU_ARCH:-${IRONIC_ARCH}}
 IRONIC_VM_SPECS_DISK=${IRONIC_VM_SPECS_DISK:-10}
 IRONIC_VM_SPECS_DISK_FORMAT=${IRONIC_VM_SPECS_DISK_FORMAT:-qcow2}
 IRONIC_VM_EPHEMERAL_DISK=${IRONIC_VM_EPHEMERAL_DISK:-0}
-IRONIC_VM_EMULATOR=${IRONIC_VM_EMULATOR:-'/usr/bin/qemu-system-x86_64'}
+IRONIC_VM_EMULATOR=${IRONIC_VM_EMULATOR:-"/usr/bin/qemu-system-${IRONIC_ARCH}"}
 IRONIC_VM_ENGINE=${IRONIC_VM_ENGINE:-qemu}
 IRONIC_VM_NETWORK_BRIDGE=${IRONIC_VM_NETWORK_BRIDGE:-brbm}
 IRONIC_VM_INTERFACE_COUNT=${IRONIC_VM_INTERFACE_COUNT:-2}
@@ -158,6 +159,8 @@ IRONIC_CLEAN_NET_NAME=${IRONIC_CLEAN_NET_NAME:-${IRONIC_PROVISION_NETWORK_NAME:-
 IRONIC_RESCUE_NET_NAME=${IRONIC_RESCUE_NET_NAME:-${IRONIC_CLEAN_NET_NAME}}
 IRONIC_EXTRA_PXE_PARAMS=${IRONIC_EXTRA_PXE_PARAMS:-}
 IRONIC_TTY_DEV=${IRONIC_TTY_DEV:-ttyS0,115200}
+IRONIC_CONSOLE=${IRONIC_CONSOLE:-console=$IRONIC_TTY_DEV}
+IRONIC_KERNEL_APPEND_PARAMS=${IRONIC_KERNEL_APPEND_PARAMS:-"nofb nomodeset ${IRONIC_CONSOLE} systemd.journald.forward_to_console=yes"}
 
 IRONIC_TEMPEST_BUILD_TIMEOUT=${IRONIC_TEMPEST_BUILD_TIMEOUT:-${BUILD_TIMEOUT:-}}
 if [[ -n "$BUILD_TIMEOUT" ]]; then
@@ -227,7 +230,7 @@ if [[ "$IRONIC_VM_ENGINE" == "auto" ]]; then
         echo "WARNING: Switching to QEMU"
         IRONIC_VM_ENGINE=qemu
         if [[ -z "$IRONIC_VM_EMULATOR" ]]; then
-            IRONIC_VM_EMULATOR='/usr/bin/qemu-system-x86_64'
+            IRONIC_VM_EMULATOR="/usr/bin/qemu-system-${IRONIC_ARCH}"
         fi
     else
         IRONIC_VM_ENGINE=kvm
@@ -270,6 +273,13 @@ if [[ "$hostdomain" =~ "rax" ]]; then
         IRONIC_RAMDISK_TYPE="tinyipa"
     fi
 fi
+
+# Which deploy driver to use - valid choices right now
+# are ``ipmi``, ``snmp`` and ``redfish``.
+#
+# Additional valid choices if IRONIC_IS_HARDWARE == true are:
+# ``idrac`` and ``irmc``.
+IRONIC_DEPLOY_DRIVER=${IRONIC_DEPLOY_DRIVER:-ipmi}
 
 # If present, these files are used as deploy ramdisk/kernel.
 # (The value must be an absolute path)
@@ -333,12 +343,6 @@ if [[ "$IRONIC_DEPLOY_ISO_REQUIRED" = "True" \
     die "Prebuilt ISOs are not available, provide an ISO via IRONIC_DEPLOY_ISO \
         or set IRONIC_BUILD_DEPLOY_RAMDISK=True to use ISOs"
 fi
-# Which deploy driver to use - valid choices right now
-# are ``ipmi``, ``snmp`` and ``redfish``.
-#
-# Additional valid choices if IRONIC_IS_HARDWARE == true are:
-# ``idrac`` and ``irmc``.
-IRONIC_DEPLOY_DRIVER=${IRONIC_DEPLOY_DRIVER:-ipmi}
 
 # If the requested driver is not yet enable, enable it, if it is not it will fail anyway
 if [[ -z "$(echo ${IRONIC_ENABLED_HARDWARE_TYPES} | grep -w ${IRONIC_DEPLOY_DRIVER})" ]]; then
@@ -607,15 +611,54 @@ IRONIC_UEFI_FILES_DIR=${IRONIC_UEFI_FILES_DIR:-/var/lib/libvirt/images}
 UEFI_LOADER_PATH=$IRONIC_UEFI_FILES_DIR/OVMF_CODE.fd
 UEFI_NVRAM_PATH=$IRONIC_UEFI_FILES_DIR/OVMF_VARS.fd
 
-# Handle architecture specific package installs
-if [[ $IRONIC_HW_ARCH == "x86_64" ]]; then
-    install_package shim
-    if is_ubuntu; then
-        install_package grub-efi-amd64-signed
-    elif is_fedora; then
-        install_package grub2-efi
+function install_grub2_packages {
+	if is_ubuntu; then
+		install_package shim-signed
+		if is_arch "x86_64"; then
+            install_package grub-efi-amd64-signed
+		elif is_arch "aarch64"; then
+            install_package grub-efi-arm64-signed
+        fi
+	elif is_fedora; then
+		if is_arch "x86_64"; then
+            install_package grub2-efi-x64 shim-x64
+		elif is_arch "aarch64"; then
+            install_package grub2-efi-aa64 shim-aa64
+        fi
     fi
-fi
+}
+
+function get_grub2_shim_file_on_ubuntu {
+    if is_arch "x86_64"; then
+		echo "/usr/lib/shim/shimx64.efi.signed"
+    elif is_arch "aarch64"; then
+		echo "/usr/lib/shim/shimaa64.efi.signed"
+	fi
+}
+
+function get_grub2_file_on_ubuntu {
+    if is_arch "x86_64"; then
+		echo "/usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed"
+    elif is_arch "aarch64"; then
+		echo "/usr/lib/grub/arm64-efi-signed/grubnetaa64.efi.signed"
+	fi
+}
+
+function get_uefi_pxe_bootfile_name {
+    if is_arch "x86_64"; then
+		echo "bootx64.efi"
+    elif is_arch "aarch64"; then
+		echo "bootaa64.efi"
+	fi
+}
+
+function get_uefi_pxe_grubfile_name {
+    if is_arch "x86_64"; then
+		echo "grubx64.efi"
+    elif is_arch "aarch64"; then
+		echo "grubaa64.efi"
+	fi
+}
 
 # Sanity checks
 if [[ "$IRONIC_BOOT_MODE" == "uefi" ]]; then
@@ -627,17 +670,11 @@ if [[ "$IRONIC_BOOT_MODE" == "uefi" ]]; then
         die $LINENO "Boot mode UEFI only works in Ubuntu or Fedora for now."
     fi
 
-    if is_arch "x86_64"; then
-        if is_ubuntu; then
-            install_package grub-efi
-        elif is_fedora; then
-            install_package grub2 grub2-efi
-        fi
-    fi
+	install_grub2_packages
 
     if is_ubuntu && [[ -z $IRONIC_GRUB2_FILE ]]; then
-        IRONIC_GRUB2_SHIM_FILE=/usr/lib/shim/shimx64.efi
-        IRONIC_GRUB2_FILE=/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed
+		IRONIC_GRUB2_SHIM_FILE=$(get_grub2_shim_file_on_ubuntu)
+		IRONIC_GRUB2_FILE=$(get_grub2_file_on_ubuntu)
     fi
 
     if [[ "$IRONIC_IPXE_ENABLED" == "False" ]]; then
@@ -717,7 +754,11 @@ function get_uefi_ipxe_boot_file {
 
 function get_uefi_loader {
     if is_ubuntu; then
-        echo /usr/share/OVMF/OVMF_CODE.fd
+        if is_arch "aarch64"; then
+            echo "/usr/share/AAVMF/AAVMF_CODE.fd"
+        else # defaut x86_64
+            echo "/usr/share/OVMF/OVMF_CODE.fd"
+        fi
     elif is_fedora; then
         echo /usr/share/edk2/ovmf/OVMF_CODE.fd
     fi
@@ -725,7 +766,11 @@ function get_uefi_loader {
 
 function get_uefi_nvram {
     if is_ubuntu; then
-        echo /usr/share/OVMF/OVMF_VARS.fd
+        if is_arch "aarch64"; then
+            echo "/usr/share/AAVMF/AAVMF_VARS.fd"
+        else # defaut x86_64
+            echo "/usr/share/OVMF/OVMF_VARS.fd"
+        fi
     elif is_fedora; then
         echo /usr/share/edk2/ovmf/OVMF_VARS.fd
     fi
@@ -1202,8 +1247,8 @@ function configure_ironic_dirs {
         die $LINENO "PXE boot file $IRONIC_PXE_BOOT_IMAGE not found."
     fi
 
-    # Copy PXE binary
-    # NOTE(mjturek): The PXE binary is x86_64 specific. So it should only be copied when
+    # Copy PXELINUX binary
+    # NOTE(mjturek): The PXELINUX binary is x86_64 specific. So it should only be copied when
     #                deploying to an x86_64 node.
     if [[ $IRONIC_HW_ARCH == "x86_64" ]]; then
         cp $IRONIC_PXE_BOOT_IMAGE $IRONIC_TFTPBOOT_DIR
@@ -1673,22 +1718,16 @@ function configure_ironic_conductor {
             -subj '/O=OpenStack/OU=DevStack Servers'
     fi
 
-    local pxe_params="nofb nomodeset console=${IRONIC_TTY_DEV}"
-    pxe_params+=" systemd.journald.forward_to_console=yes"
+    local kernel_append_params="${IRONIC_KERNEL_APPEND_PARAMS}"
     if is_service_enabled tls-proxy; then
-        pxe_params+=" ipa-insecure=1"
+        kernel_append_params+=" ipa-insecure=1"
     fi
 
+    local pxe_params=$kernel_append_params
     pxe_params+=" $IRONIC_EXTRA_PXE_PARAMS"
 
     if [[ -n "$pxe_params" ]]; then
         iniset $IRONIC_CONF_FILE pxe pxe_append_params "$pxe_params"
-    fi
-
-    local kernel_append_params="nofb nomodeset console=${IRONIC_TTY_DEV}"
-    kernel_append_params+=" systemd.journald.forward_to_console=yes"
-    if is_service_enabled tls-proxy; then
-        kernel_append_params+=" ipa-insecure=1"
     fi
 
     if [[ -n "kernel_append_params" ]]; then
@@ -2254,7 +2293,7 @@ function enroll_nodes {
         local ironic_node_ram=$IRONIC_VM_SPECS_RAM
         local ironic_node_disk=$IRONIC_VM_SPECS_DISK
         local ironic_ephemeral_disk=$IRONIC_VM_EPHEMERAL_DISK
-        local ironic_node_arch=x86_64
+        local ironic_node_arch=$IRONIC_VM_SPECS_CPU_ARCH
         local ironic_hwinfo_file=$IRONIC_VM_MACS_CSV_FILE
 
         if is_deployed_by_ipmi; then
@@ -2334,15 +2373,6 @@ function enroll_nodes {
                     --local-link-connection switch_info=${switch_info} "
             fi
 
-            if [[ "${IRONIC_STORAGE_INTERFACE}" == "cinder" ]]; then
-                local connector_iqn="iqn.2017-05.org.openstack.$node_prefix-$total_nodes"
-                if [[ -n "$node_capabilities" ]]; then
-                    node_capabilities+=",iscsi_boot:True"
-                else
-                    node_capabilities+=" --property capabilities=iscsi_boot:True"
-                fi
-            fi
-
         else
             # Currently we require all hardware platform have same CPU/RAM/DISK info
             # in future, this can be enhanced to support different type, and then
@@ -2405,6 +2435,15 @@ function enroll_nodes {
         if [ $total_nodes -eq 0 ]; then
             standalone_node_uuid="--uuid $IRONIC_NODE_UUID"
         fi
+
+		if [[ "${IRONIC_STORAGE_INTERFACE}" == "cinder" ]]; then
+			local connector_iqn="iqn.2017-05.org.openstack.$node_prefix-$total_nodes"
+			if [[ -n "$node_capabilities" ]]; then
+				node_capabilities+=",iscsi_boot:True"
+			else
+				node_capabilities+=" --property capabilities=iscsi_boot:True"
+			fi
+		fi
 
         # TODO(dtantsur): it would be cool to test with different resource
         # classes, but for now just use the same.
@@ -2620,7 +2659,7 @@ function configure_tftpd {
         echo "re ^(^/) $IRONIC_TFTPBOOT_DIR/\1"  >>$IRONIC_TFTPBOOT_DIR/map-file
         echo "re ^([^/]) $IRONIC_TFTPBOOT_DIR/\1" >>$IRONIC_TFTPBOOT_DIR/map-file
 
-        sudo cp $IRONIC_GRUB2_SHIM_FILE $IRONIC_TFTPBOOT_DIR/bootx64.efi
+		sudo cp $IRONIC_GRUB2_SHIM_FILE $IRONIC_TFTPBOOT_DIR/$(get_uefi_pxe_bootfile_name)
 
         if is_fedora; then
             grub_subdir="EFI/fedora"
@@ -2634,7 +2673,7 @@ function configure_tftpd {
         # to find on disk. That being said, the grub-mknetdir utility generates
         # these files for us.
         grub-mknetdir --net-directory="$IRONIC_TFTPBOOT_DIR" --subdir="$grub_subdir"
-        sudo cp $grub_dir/x86_64-efi/core.efi $IRONIC_TFTPBOOT_DIR/grubx64.efi
+		sudo cp $grub_dir/*64-efi/core.efi $IRONIC_TFTPBOOT_DIR/$(get_uefi_pxe_grubfile_name)
         cat << EOF > $grub_dir/grub.cfg
 set default=master
 set timeout=1
@@ -2646,7 +2685,7 @@ configfile $IRONIC_TFTPBOOT_DIR/\$net_default_mac.conf
 EOF
         chmod 644 $grub_dir/grub.cfg
         iniset $IRONIC_CONF_FILE pxe uefi_pxe_config_template '$pybasedir/drivers/modules/pxe_grub_config.template'
-        iniset $IRONIC_CONF_FILE pxe uefi_pxe_bootfile_name  "bootx64.efi"
+		iniset $IRONIC_CONF_FILE pxe uefi_pxe_bootfile_name  "$(get_uefi_pxe_bootfile_name)"
     else
         echo "r ^([^/]) $IRONIC_TFTPBOOT_DIR/\1" >$IRONIC_TFTPBOOT_DIR/map-file
         echo "r ^(/tftpboot/) $IRONIC_TFTPBOOT_DIR/\2" >>$IRONIC_TFTPBOOT_DIR/map-file
@@ -2675,6 +2714,7 @@ function build_ipa_ramdisk {
 
 function setup_ipa_builder {
     git_clone $IRONIC_PYTHON_AGENT_BUILDER_REPO $IRONIC_PYTHON_AGENT_BUILDER_DIR $IRONIC_PYTHON_AGENT_BUILDER_BRANCH
+	git_clone $IRONIC_PYTHON_AGENT_REPO $IRONIC_PYTHON_AGENT_DIR $IRONIC_PYTHON_AGENT_BRANCH
 }
 
 function build_tinyipa_ramdisk {
@@ -2920,7 +2960,7 @@ function prepare_baremetal_basic_ops {
 
     upload_baremetal_ironic_deploy
 
-    if [[ "$IRONIC_BOOT_MODE" == "uefi" && is_deployed_by_redfish ]]; then
+    if [[ "$IRONIC_BOOT_MODE" == "uefi" ]] && is_deployed_by_redfish; then
         upload_baremetal_ironic_efiboot
     fi
 
