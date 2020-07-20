@@ -647,6 +647,21 @@
         IRONIC_VM_SPECS_RAM: 4096
 
 - job:
+    name: ironic-tempest-ipa-partition-uefi-pxe-grub2-arm64
+    description: Arm64 ironic tempest scenario test utilizing PXE, UEFI, and Grub2
+    parent: ironic-base
+    nodeset: openstack-single-node-arm64
+    vars:
+      devstack_localrc:
+        CIRROS_ARCH: aarch64
+        IRONIC_ENABLED_HARDWARE_TYPES: ipmi
+        IRONIC_ENABLED_BOOT_INTERFACES: pxe
+        IRONIC_IPXE_ENABLED: False
+        IRONIC_BOOT_MODE: uefi
+        IRONIC_AUTOMATED_CLEAN_ENABLED: False
+        IRONIC_DEFAULT_BOOT_OPTION: netboot
+        IRONIC_VM_SPECS_RAM: 4096
+- job:
     # Security testing for known issues
     name: ironic-tox-bandit
     parent: openstack-tox
