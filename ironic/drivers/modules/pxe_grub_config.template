@@ -12,6 +12,12 @@ menuentry "boot_partition"  {
     initrd {{ pxe_options.ari_path }}
 }
 
+menuentry "boot_iscsi"  {
+    linux {{ pxe_options.aki_path }} ro text {{ pxe_options.pxe_append_params|default("", true) }}  boot_server={{pxe_options.tftp_server}} ip=dhcp iscsi_initiator={{ pxe_options.iscsi_initiator_iqn }} iscsi_username={{ pxe_options.username }} iscsi_password={{ pxe_options.password }} root={{ pxe_options.iscsi_boot_url }}
+    initrd {{ pxe_options.ari_path }}
+}
+
+
 menuentry "boot_ramdisk"  {
     linux {{ pxe_options.aki_path }} root=/dev/ram0 text {{ pxe_options.pxe_append_params|default("", true) }} {{ pxe_options.ramdisk_opts|default('', true) }}
     initrd {{ pxe_options.ari_path }}
