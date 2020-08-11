@@ -76,19 +76,17 @@ class CinderStorage(base.StorageInterface):
         iscsi_uuids_found = []
         wwpn_found = 0
         wwnn_found = 0
-        ipxe_enabled = False
-        if 'ipxe_boot' in task.driver.boot.capabilities:
-            ipxe_enabled = True
 
         for connector in task.volume_connectors:
             if (connector.type in VALID_ISCSI_TYPES
                     and connector.connector_id is not None):
                 iscsi_uuids_found.append(connector.uuid)
-                if not ipxe_enabled:
+                if ('ipxe_boot' not in task.driver.boot.capabilities
+                        and 'pxe_boot' not in task.driver.boot.capabilities):
                     msg = _("The [pxe]/ipxe_enabled option must "
                             "be set to True or the boot interface "
-                            "must be set to ``ipxe`` to support network "
-                            "booting to an iSCSI volume.")
+                            "must be set to ``ipxe`` or ``pxe`` to "
+                            "support network booting to an iSCSI volume.")
                     self._fail_validation(task, msg)
 
             if (connector.type in VALID_FC_TYPES
@@ -358,13 +356,10 @@ class CinderStorage(base.StorageInterface):
         """
         # NOTE(TheJulia): There is no reason to check if a root volume
         # exists here because if the validation has already been passed
-        # then we know that there should be a volume. If there is an
-        # image_source, then we should expect to write it out.
-        instance_info = task.node.instance_info
-        if 'image_source' not in instance_info:
-            for volume in task.volume_targets:
-                if volume['boot_index'] == 0:
-                    return False
+        # then we know that there should be a volume.
+        for volume in task.volume_targets:
+            if volume['boot_index'] == 0:
+                return False
         return True
 
     def _generate_connector(self, task):

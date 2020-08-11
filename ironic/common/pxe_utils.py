@@ -785,8 +785,7 @@ def build_pxe_config_options(task, pxe_info, service=False,
     mode = deploy_utils.rescue_or_deploy_mode(node)
     if service:
         pxe_options = {}
-    elif (node.driver_internal_info.get('boot_from_volume')
-            and ipxe_enabled):
+    elif node.driver_internal_info.get('boot_from_volume'):
         pxe_options = get_volume_pxe_options(task)
     else:
         pxe_options = build_deploy_pxe_options(task, pxe_info, mode=mode,
