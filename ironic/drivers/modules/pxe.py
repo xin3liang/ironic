@@ -34,7 +34,7 @@ METRICS = metrics_utils.get_metrics_logger(__name__)
 
 class PXEBoot(pxe_base.PXEBaseMixin, base.BootInterface):
 
-    capabilities = ['ramdisk_boot', 'pxe_boot']
+    capabilities = ['iscsi_volume_boot', 'ramdisk_boot', 'pxe_boot']
 
 
 class PXERamdiskDeploy(agent.AgentDeploy):
